@@ -661,7 +661,12 @@ async def run_web_server():
 
 async def run_telegram_bot():
     """اجرای اصلی ربات تلگرام"""
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = (
+    Application.builder()
+    .token(BOT_TOKEN)
+    .concurrent_updates(True)
+    .build()
+    )
     
     # دریافت یوزرنیم ربات
     await application.initialize()
@@ -740,14 +745,10 @@ async def main():
     )
 
 if __name__ == '__main__':
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
+    import asyncio
     try:
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
         logger.exception(f"Critical error: {e}")
-    finally:
-        loop.close()
