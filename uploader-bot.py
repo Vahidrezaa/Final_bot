@@ -46,7 +46,7 @@ class Database:
         """ایجاد جداول مورد نیاز"""
         async with self.pool.acquire() as conn:
 
-			await conn.execute('''
+	    await conn.execute('''
                 ALTER TABLE categories ADD COLUMN IF NOT EXISTS timer INTEGER
             ''')
         
