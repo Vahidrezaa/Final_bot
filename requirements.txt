@@ -1,0 +1,5 @@
+python-telegram-bot[job-queue]==20.5
+asyncpg
+python-dotenv
+aiohttp
+python-multipart
