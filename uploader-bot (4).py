@@ -226,6 +226,59 @@ class Database:
             )
             return result.split()[-1] == '1'
 
+class TimerManager:
+    """مدیریت تایمر ساده بدون تغییر در ساختار اصلی"""
+    
+    def __init__(self, db):
+        self.db = db
+    
+    async def get_effective_timer(self, category_id: str) -> int:
+        """دریافت تایمر مؤثر برای دسته"""
+        category_timer = await self.db.get_category_timer(category_id)
+        if category_timer >= 0:
+            return category_timer
+        return await self.db.get_default_timer()
+    
+    async def schedule_deletion(self, context: ContextTypes.DEFAULT_TYPE, message: Message, delay: int):
+        """زمان‌بندی حذف پیام پس از تاخیر"""
+        if delay <= 0:
+            return
+        
+        try:
+            await asyncio.sleep(delay)
+            await context.bot.delete_message(
+                chat_id=message.chat_id,
+                message_id=message.message_id
+            )
+        except Exception as e:
+            logger.warning(f"حذف پیام ناموفق: {e}")
+    
+    async def send_with_timer(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, file_info: dict, timer_seconds: int):
+        """ارسال فایل با قابلیت تایمر"""
+        file_type = file_info['file_type']
+        send_func = {
+            'document': context.bot.send_document,
+            'photo': context.bot.send_photo,
+            'video': context.bot.send_video,
+            'audio': context.bot.send_audio
+        }.get(file_type)
+        
+        if send_func:
+            try:
+                sent_message = await send_func(
+                    chat_id=chat_id,
+                    **{file_type: file_info['file_id']},
+                    caption=file_info.get('caption', '')[:1024]
+                )
+                
+                if timer_seconds > 0:
+                    asyncio.create_task(self.schedule_deletion(context, sent_message, timer_seconds))
+                
+                return sent_message
+            except Exception as e:
+                logger.error(f"ارسال فایل {file_type} خطا: {e}")
+        return None
+
 class BotManager:
     """مدیریت اصلی ربات"""
     
@@ -234,6 +287,7 @@ class BotManager:
         self.pending_uploads = {}  # {user_id: {'category_id': str, 'files': list}}
         self.pending_channels = {}  # {user_id: {'channel_id': str, 'name': str, 'link': str}}
         self.bot_username = None
+	self.timer_manager = TimerManager(self.db)
     
     async def init(self, bot_username: str):
         """راه‌اندازی اولیه"""
