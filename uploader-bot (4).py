@@ -438,59 +438,108 @@ async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE, ca
     )
 
 async def admin_category_menu(message: Message, category_id: str):
-    """منوی مدیریت دسته برای ادمین"""
+    """منوی مدیریت دسته برای ادمین با نمایش وضعیت تایمر"""
     try:
+        # دریافت اطلاعات دسته از پایگاه داده
         category = await bot_manager.db.get_category(category_id)
         if not category:
             await message.reply_text("❌ دسته یافت نشد!")
             return
         
+        # دریافت وضعیت تایمر از پایگاه داده
+        category_timer = await bot_manager.db.get_category_timer(category_id)
+        default_timer = await bot_manager.db.get_default_timer()
+        
+        # ایجاد پیام وضعیت تایمر
+        timer_status = "⏱ تایمر: "
+        
+        if category_timer == -1:
+            # اگر تایمر اختصاصی تنظیم نشده، از تایمر پیش‌فرض استفاده می‌شود
+            if default_timer > 0:
+                timer_status += f"پیش‌فرض ({default_timer} ثانیه)"
+            else:
+                timer_status += "پیش‌فرض (غیرفعال)"
+        else:
+            # اگر تایمر اختصاصی تنظیم شده
+            if category_timer > 0:
+                timer_status += f"اختصاصی ({category_timer} ثانیه)"
+            else:
+                timer_status += "غیرفعال"
+        
+        # ایجاد صفحه کلید اینلاین
         keyboard = [
             [InlineKeyboardButton("📁 مشاهده فایل‌ها", callback_data=f"view_{category_id}")],
             [InlineKeyboardButton("➕ افزودن فایل", callback_data=f"add_{category_id}")],
+            [InlineKeyboardButton("⏱ تنظیم تایمر", callback_data=f"timer_{category_id}")],  # دکمه جدید
             [InlineKeyboardButton("🗑 حذف دسته", callback_data=f"delcat_{category_id}")]
         ]
         
+        # ارسال پیام با اطلاعات کامل
         await message.reply_text(
             f"📂 دسته: {category['name']}\n"
-            f"📦 تعداد فایل‌ها: {len(category['files'])}\n\n"
+            f"📦 تعداد فایل‌ها: {len(category['files'])}\n"
+            f"{timer_status}\n\n"
             "لطفا عملیات مورد نظر را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup(keyboard))
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
     except Exception as e:
         logger.error(f"خطا در منوی ادمین: {e}")
         await message.reply_text("❌ خطایی در نمایش منو رخ داد")
 
 async def send_category_files(message: Message, context: ContextTypes.DEFAULT_TYPE, category_id: str):
-    """ارسال فایل‌های یک دسته"""
+    """ارسال فایل‌های یک دسته با پشتیبانی تایمر"""
     try:
         chat_id = message.chat_id
         
+        # دریافت اطلاعات دسته از پایگاه داده
         category = await bot_manager.db.get_category(category_id)
         if not category or not category['files']:
             await message.reply_text("❌ فایلی برای نمایش وجود ندارد!")
             return
         
+        # دریافت تایمر مؤثر برای این دسته
+        timer_seconds = await bot_manager.timer_manager.get_effective_timer(category_id)
+        
         await message.reply_text(f"📤 ارسال فایل‌های '{category['name']}'...")
         
+        # ارسال تمام فایل‌های دسته با در نظر گرفتن تایمر
         for file in category['files']:
             try:
-                send_func = {
-                    'document': context.bot.send_document,
-                    'photo': context.bot.send_photo,
-                    'video': context.bot.send_video,
-                    'audio': context.bot.send_audio
-                }.get(file['file_type'])
-                
-                if send_func:
-                    await send_func(
-                        chat_id=chat_id,
-                        **{file['file_type']: file['file_id']},
-                        caption=file.get('caption', '')[:1024]
-                    )
-                await asyncio.sleep(0.5)  # افزایش تاخیر برای جلوگیری از محدودیت
+                # ارسال فایل با استفاده از سیستم تایمر
+                await bot_manager.timer_manager.send_with_timer(
+                    context, 
+                    chat_id, 
+                    file, 
+                    timer_seconds
+                )
+                # تاخیر کوتاه بین ارسال فایل‌ها
+                await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"ارسال فایل خطا: {e}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(2)  # تاخیر بیشتر در صورت خطا
+        
+        # ارسال پیام هشدار در صورت فعال بودن تایمر
+        if timer_seconds > 0:
+            try:
+                # ارسال پیام هشدار
+                warning_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⚠️ توجه: فایل‌های ارسال شده به صورت خودکار بعد از {timer_seconds} ثانیه حذف خواهند شد.\n"
+                         "لطفاً آن‌ها را به پیام‌های ذخیره شده خود ارسال کنید."
+                )
+                
+                # زمان‌بندی حذف خودکار پیام هشدار
+                asyncio.create_task(
+                    bot_manager.timer_manager.schedule_deletion(
+                        context, 
+                        warning_msg, 
+                        timer_seconds
+                    )
+                )
+            except Exception as e:
+                logger.error(f"ارسال پیام هشدار خطا: {e}")
+            
     except Exception as e:
         logger.error(f"خطا در ارسال فایل‌ها: {e}")
         await message.reply_text("❌ خطایی در ارسال فایل‌ها رخ داد")
@@ -498,6 +547,26 @@ async def send_category_files(message: Message, context: ContextTypes.DEFAULT_TY
 # ========================
 # ==== ADMIN COMMANDS ====
 # ========================
+
+async def set_timer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تنظیم تایمر پیش‌فرض"""
+    if not bot_manager.is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ دسترسی ممنوع!")
+        return
+    
+    try:
+        seconds = int(context.args[0])
+        if seconds < 0:
+            raise ValueError
+    except (ValueError, IndexError):
+        await update.message.reply_text("❌ مقدار نامعتبر! لطفا عدد ثانیه را وارد کنید.\nمثال: /timer 60")
+        return
+    
+    await bot_manager.db.set_default_timer(seconds)
+    status = "✅ تایمر پیش‌فرض تنظیم شد به: " + (
+        f"{seconds} ثانیه" if seconds > 0 else "غیرفعال"
+    )
+    await update.message.reply_text(status)
 
 async def new_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ایجاد دسته جدید"""
