@@ -80,7 +80,34 @@ class Database:
             # ایندکس‌های بهینه‌سازی
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_files_category ON files(category_id)')
             logger.info("Database initialized")
+            
+    async def set_default_timer(self, seconds: int):
+        """تنظیم تایمر پیش‌فرض"""
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE global_settings SET default_timer = $1 WHERE id = 1",
+                seconds
+            )
 
+    async def get_default_timer(self) -> int:
+        """دریافت تایمر پیش‌فرض"""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT default_timer FROM global_settings WHERE id = 1")
+            return row['default_timer'] if row else 0
+
+    async def set_category_timer(self, category_id: str, seconds: int):
+        """تنظیم تایمر اختصاصی برای دسته"""
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE categories SET timer = $1 WHERE id = $2",
+                seconds, category_id
+            )
+
+    async def get_category_timer(self, category_id: str) -> int:
+        """دریافت تایمر اختصاصی دسته"""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT timer FROM categories WHERE id = $1", category_id)
+            return row['timer'] if row and row['timer'] is not None else -1
     # --- مدیریت دسته‌ها ---
     async def add_category(self, name: str, created_by: int) -> str:
         """ایجاد دسته جدید"""
