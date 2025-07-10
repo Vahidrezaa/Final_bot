@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # حالت‌های گفتگو
-UPLOADING, WAITING_CHANNEL_INFO = range(2)
+UPLOADING, WAITING_CHANNEL_INFO, WAITING_TIMER_INPUT = range(3)
 
 class Database:
     """مدیریت دیتابیس PostgreSQL بهینه‌شده"""
@@ -45,8 +45,8 @@ class Database:
     async def init_db(self):
         """ایجاد جداول مورد نیاز"""
         async with self.pool.acquire() as conn:
-
-	    # اضافه کردن ستون timer به جدول categories
+            
+            # اضافه کردن ستون timer به جدول categories
             await conn.execute('''
                 ALTER TABLE categories ADD COLUMN IF NOT EXISTS timer INTEGER
             ''')
@@ -66,7 +66,7 @@ class Database:
                 ON CONFLICT (id) DO NOTHING
             ''')
 
-	    
+
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS categories (
                     id TEXT PRIMARY KEY,
