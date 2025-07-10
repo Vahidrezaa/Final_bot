@@ -725,7 +725,7 @@ async def run_telegram_bot():
     # اجرای ربات
     logger.info("Starting Telegram bot...")
     await application.start()
-    await application.updater.start_polling()
+    await application.run_polling()
     
     # نگه داشتن ربات در حالت اجرا
     while True:
