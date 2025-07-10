@@ -1060,7 +1060,7 @@ async def keep_alive():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://uploader-bot-ely6.onrender.com") as resp:
+                async with session.get("https://final-bot-d3dk.onrender.com") as resp:
                     if resp.status == 200:
                         logger.info("✅ Keep-alive ping sent successfully")
                     else:
