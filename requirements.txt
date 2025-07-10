@@ -4,3 +4,4 @@ python-dotenv
 aiohttp==3.9.3
 python-multipart
 uuid
+python-3.10.13
