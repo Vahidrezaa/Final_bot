@@ -670,6 +670,37 @@ async def categories_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message)
 
+# اضافه شدن حالت جدید به حالت‌های گفتگو
+UPLOADING, WAITING_CHANNEL_INFO, WAITING_TIMER_INPUT = range(3)
+
+async def handle_timer_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پردازش ورودی تایمر"""
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    
+    try:
+        seconds = int(text)
+    except ValueError:
+        await update.message.reply_text("❌ لطفا یک عدد وارد کنید!")
+        return WAITING_TIMER_INPUT
+    
+    category_id = context.user_data.get('timer_category')
+    if not category_id:
+        await update.message.reply_text("❌ خطا در پردازش!")
+        return ConversationHandler.END
+    
+    if seconds == -1:
+        await bot_manager.db.set_category_timer(category_id, None)
+        await update.message.reply_text("✅ تایمر اختصاصی حذف شد، از تایمر پیش‌فرض استفاده می‌شود")
+    else:
+        await bot_manager.db.set_category_timer(category_id, seconds)
+        status = f"✅ تایمر اختصاصی تنظیم شد به: {seconds} ثانیه" if seconds > 0 else "✅ تایمر غیرفعال شد"
+        await update.message.reply_text(status)
+    
+    # بازگشت به منوی دسته
+    await admin_category_menu(update.message, category_id)
+    return ConversationHandler.END
+
 # ========================
 # === CHANNEL MANAGEMENT ==
 # ========================
@@ -990,6 +1021,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await conn.execute("DELETE FROM categories WHERE id = $1", category_id)
         
         await query.edit_message_text(f"✅ دسته '{category['name']}' حذف شد!")
+    elif data.startswith('timer_'):  # بخش جدید برای تایمر
+        category_id = data[6:]
+        context.user_data['timer_category'] = category_id
+        await query.edit_message_text(
+            "⏱ لطفا زمان تایمر را به ثانیه وارد کنید:\n"
+            "• 0 برای غیرفعال کردن\n"
+            "• -1 برای استفاده از تایمر پیش‌فرض\n"
+            "• عدد مثبت برای زمان دلخواه (ثانیه)"
+        )
+        return WAITING_TIMER_INPUT
 
 # ========================
 # === UTILITY HANDLERS ===
@@ -1063,7 +1104,20 @@ async def run_telegram_bot():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("new_category", new_category))
     application.add_handler(CommandHandler("categories", categories_list))
-    
+    application.add_handler(CommandHandler("timer", set_timer_command))
+
+	timer_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(button_handler)],
+        states={
+            WAITING_TIMER_INPUT: [MessageHandler(filters.TEXT, handle_timer_input)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        map_to_parent={
+            ConversationHandler.END: ConversationHandler.END
+        }
+    )
+    application.add_handler(timer_handler)
+
     # آپلود فایل‌ها
     upload_handler = ConversationHandler(
         entry_points=[CommandHandler("upload", upload_command)],
