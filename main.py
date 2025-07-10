@@ -630,7 +630,7 @@ async def keep_alive():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://final-bot-d3dk.onrender.com/healthz") as resp:
+                async with session.get("https://uploader-bot-ely6.onrender.com") as resp:
                     if resp.status == 200:
                         logger.info("✅ Keep-alive ping sent successfully")
                     else:
@@ -661,12 +661,7 @@ async def run_web_server():
 
 async def run_telegram_bot():
     """اجرای اصلی ربات تلگرام"""
-    application = (
-    Application.builder()
-    .token(BOT_TOKEN)
-    .concurrent_updates(True)
-    .build()
-    )
+    application = Application.builder().token(BOT_TOKEN).build()
     
     # دریافت یوزرنیم ربات
     await application.initialize()
@@ -730,7 +725,7 @@ async def run_telegram_bot():
     # اجرای ربات
     logger.info("Starting Telegram bot...")
     await application.start()
-    await application.run_polling()
+    await application.updater.start_polling()
     
     # نگه داشتن ربات در حالت اجرا
     while True:
@@ -745,10 +740,14 @@ async def main():
     )
 
 if __name__ == '__main__':
-    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        asyncio.run(main())
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
         logger.exception(f"Critical error: {e}")
+    finally:
+        loop.close()
