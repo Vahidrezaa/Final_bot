@@ -45,6 +45,25 @@ class Database:
     async def init_db(self):
         """ایجاد جداول مورد نیاز"""
         async with self.pool.acquire() as conn:
+
+			await conn.execute('''
+                ALTER TABLE categories ADD COLUMN IF NOT EXISTS timer INTEGER
+            ''')
+        
+            # ایجاد جدول global_settings
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS global_settings (
+                    id SERIAL PRIMARY KEY,
+                    default_timer INTEGER NOT NULL DEFAULT 0
+                )
+            ''')
+        
+            # درج مقدار پیش‌فرض
+            await conn.execute('''
+                INSERT INTO global_settings (id, default_timer)
+                VALUES (1, 0)
+                ON CONFLICT (id) DO NOTHING
+            ''')
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS categories (
                     id TEXT PRIMARY KEY,
