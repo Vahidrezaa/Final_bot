@@ -1,5 +1,6 @@
 python-telegram-bot[job-queue]==20.6
 asyncpg
 python-dotenv
-aiohttp 3.9.3
+aiohttp==3.9.3
 python-multipart
+uuid
