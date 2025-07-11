@@ -432,9 +432,8 @@ class TimerManager:
 				keyboard = []
 				for channel in non_joined:
 					button = InlineKeyboardButton(
-						text=f
-					"📢 {channel['channel_name']}",
-					url = channel['invite_link']
+						text=f"📢 {channel['channel_name']}",
+					    url = channel['invite_link']
 					)
 					keyboard.append([button])
 
