@@ -554,8 +554,8 @@ class TimerManager:
 							logger.error(f"ارسال پیام هشدار خطا: {e}")
 
 					except Exception as e:
-					logger.error(f"خطا در ارسال فایل‌ها: {e}")
-					await message.reply_text("❌ خطایی در ارسال فایل‌ها رخ داد")
+					        logger.error(f"خطا در ارسال فایل‌ها: {e}")
+				        	await message.reply_text("❌ خطایی در ارسال فایل‌ها رخ داد")
 
 			# ========================
 			# ==== ADMIN COMMANDS ====
