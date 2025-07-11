@@ -256,8 +256,7 @@ class TimerManager:
 				message_id=message.message_id
 			)
 		except Exception as e:
-			logger.warning(f
-			"حذف پیام ناموفق: {e}")
+			logger.warning(f"حذف پیام ناموفق: {e}")
 
 		async def send_with_timer(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, file_info: dict,
 		                          timer_seconds: int):
