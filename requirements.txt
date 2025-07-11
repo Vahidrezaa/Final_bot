@@ -1,5 +1,5 @@
-python-telegram-bot[job-queue]==21.1.1
+python-telegram-bot[job-queue]==20.5
 asyncpg==0.29.0
-python-dotenv==1.0.1
-uuid
-aiohttp==3.9.5
+python-dotenv==1.0.0
+aiohttp==3.9.3
+psycopg2-binary==2.9.9
