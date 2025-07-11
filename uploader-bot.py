@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # حالت‌های گفتگو
-UPLOADING, WAITING_CHANNEL_INFO, WAITING_TIMER_INPUT = range(3)
+UPLOADING, WAITING_CHANNEL_INFO = range(2)
 
 class Database:
     """مدیریت دیتابیس PostgreSQL بهینه‌شده"""
@@ -45,25 +45,6 @@ class Database:
     async def init_db(self):
         """ایجاد جداول مورد نیاز"""
         async with self.pool.acquire() as conn:
-
-            await conn.execute('''
-                ALTER TABLE categories ADD COLUMN IF NOT EXISTS timer INTEGER
-            ''')
-        
-            # ایجاد جدول global_settings
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS global_settings (
-                    id SERIAL PRIMARY KEY,
-                    default_timer INTEGER NOT NULL DEFAULT 0
-                )
-            ''')
-        
-            # درج مقدار پیش‌فرض
-            await conn.execute('''
-                INSERT INTO global_settings (id, default_timer)
-                VALUES (1, 0)
-                ON CONFLICT (id) DO NOTHING
-            ''')
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS categories (
                     id TEXT PRIMARY KEY,
@@ -99,34 +80,7 @@ class Database:
             # ایندکس‌های بهینه‌سازی
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_files_category ON files(category_id)')
             logger.info("Database initialized")
-            
-    async def set_default_timer(self, seconds: int):
-        """تنظیم تایمر پیش‌فرض"""
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE global_settings SET default_timer = $1 WHERE id = 1",
-                seconds
-            )
 
-    async def get_default_timer(self) -> int:
-        """دریافت تایمر پیش‌فرض"""
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT default_timer FROM global_settings WHERE id = 1")
-            return row['default_timer'] if row else 0
-
-    async def set_category_timer(self, category_id: str, seconds: int):
-        """تنظیم تایمر اختصاصی برای دسته"""
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE categories SET timer = $1 WHERE id = $2",
-                seconds, category_id
-            )
-
-    async def get_category_timer(self, category_id: str) -> int:
-        """دریافت تایمر اختصاصی دسته"""
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT timer FROM categories WHERE id = $1", category_id)
-            return row['timer'] if row and row['timer'] is not None else -1
     # --- مدیریت دسته‌ها ---
     async def add_category(self, name: str, created_by: int) -> str:
         """ایجاد دسته جدید"""
@@ -226,59 +180,6 @@ class Database:
             )
             return result.split()[-1] == '1'
 
-class TimerManager:
-    """مدیریت تایمر ساده بدون تغییر در ساختار اصلی"""
-    
-    def __init__(self, db):
-        self.db = db
-    
-    async def get_effective_timer(self, category_id: str) -> int:
-        """دریافت تایمر مؤثر برای دسته"""
-        category_timer = await self.db.get_category_timer(category_id)
-        if category_timer >= 0:
-            return category_timer
-        return await self.db.get_default_timer()
-    
-    async def schedule_deletion(self, context: ContextTypes.DEFAULT_TYPE, message: Message, delay: int):
-        """زمان‌بندی حذف پیام پس از تاخیر"""
-        if delay <= 0:
-            return
-        
-        try:
-            await asyncio.sleep(delay)
-            await context.bot.delete_message(
-                chat_id=message.chat_id,
-                message_id=message.message_id
-            )
-        except Exception as e:
-            logger.warning(f"حذف پیام ناموفق: {e}")
-    
-    async def send_with_timer(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, file_info: dict, timer_seconds: int):
-        """ارسال فایل با قابلیت تایمر"""
-        file_type = file_info['file_type']
-        send_func = {
-            'document': context.bot.send_document,
-            'photo': context.bot.send_photo,
-            'video': context.bot.send_video,
-            'audio': context.bot.send_audio
-        }.get(file_type)
-        
-        if send_func:
-            try:
-                sent_message = await send_func(
-                    chat_id=chat_id,
-                    **{file_type: file_info['file_id']},
-                    caption=file_info.get('caption', '')[:1024]
-                )
-                
-                if timer_seconds > 0:
-                    asyncio.create_task(self.schedule_deletion(context, sent_message, timer_seconds))
-                
-                return sent_message
-            except Exception as e:
-                logger.error(f"ارسال فایل {file_type} خطا: {e}")
-        return None
-
 class BotManager:
     """مدیریت اصلی ربات"""
     
@@ -287,7 +188,6 @@ class BotManager:
         self.pending_uploads = {}  # {user_id: {'category_id': str, 'files': list}}
         self.pending_channels = {}  # {user_id: {'channel_id': str, 'name': str, 'link': str}}
         self.bot_username = None
-        self.timer_manager = TimerManager(self.db)
     
     async def init(self, bot_username: str):
         """راه‌اندازی اولیه"""
@@ -438,108 +338,59 @@ async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE, ca
     )
 
 async def admin_category_menu(message: Message, category_id: str):
-    """منوی مدیریت دسته برای ادمین با نمایش وضعیت تایمر"""
+    """منوی مدیریت دسته برای ادمین"""
     try:
-        # دریافت اطلاعات دسته از پایگاه داده
         category = await bot_manager.db.get_category(category_id)
         if not category:
             await message.reply_text("❌ دسته یافت نشد!")
             return
         
-        # دریافت وضعیت تایمر از پایگاه داده
-        category_timer = await bot_manager.db.get_category_timer(category_id)
-        default_timer = await bot_manager.db.get_default_timer()
-        
-        # ایجاد پیام وضعیت تایمر
-        timer_status = "⏱ تایمر: "
-        
-        if category_timer == -1:
-            # اگر تایمر اختصاصی تنظیم نشده، از تایمر پیش‌فرض استفاده می‌شود
-            if default_timer > 0:
-                timer_status += f"پیش‌فرض ({default_timer} ثانیه)"
-            else:
-                timer_status += "پیش‌فرض (غیرفعال)"
-        else:
-            # اگر تایمر اختصاصی تنظیم شده
-            if category_timer > 0:
-                timer_status += f"اختصاصی ({category_timer} ثانیه)"
-            else:
-                timer_status += "غیرفعال"
-        
-        # ایجاد صفحه کلید اینلاین
         keyboard = [
             [InlineKeyboardButton("📁 مشاهده فایل‌ها", callback_data=f"view_{category_id}")],
             [InlineKeyboardButton("➕ افزودن فایل", callback_data=f"add_{category_id}")],
-            [InlineKeyboardButton("⏱ تنظیم تایمر", callback_data=f"timer_{category_id}")],  # دکمه جدید
             [InlineKeyboardButton("🗑 حذف دسته", callback_data=f"delcat_{category_id}")]
         ]
         
-        # ارسال پیام با اطلاعات کامل
         await message.reply_text(
             f"📂 دسته: {category['name']}\n"
-            f"📦 تعداد فایل‌ها: {len(category['files'])}\n"
-            f"{timer_status}\n\n"
+            f"📦 تعداد فایل‌ها: {len(category['files'])}\n\n"
             "لطفا عملیات مورد نظر را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"خطا در منوی ادمین: {e}")
         await message.reply_text("❌ خطایی در نمایش منو رخ داد")
 
 async def send_category_files(message: Message, context: ContextTypes.DEFAULT_TYPE, category_id: str):
-    """ارسال فایل‌های یک دسته با پشتیبانی تایمر"""
+    """ارسال فایل‌های یک دسته"""
     try:
         chat_id = message.chat_id
         
-        # دریافت اطلاعات دسته از پایگاه داده
         category = await bot_manager.db.get_category(category_id)
         if not category or not category['files']:
             await message.reply_text("❌ فایلی برای نمایش وجود ندارد!")
             return
         
-        # دریافت تایمر مؤثر برای این دسته
-        timer_seconds = await bot_manager.timer_manager.get_effective_timer(category_id)
-        
         await message.reply_text(f"📤 ارسال فایل‌های '{category['name']}'...")
         
-        # ارسال تمام فایل‌های دسته با در نظر گرفتن تایمر
         for file in category['files']:
             try:
-                # ارسال فایل با استفاده از سیستم تایمر
-                await bot_manager.timer_manager.send_with_timer(
-                    context, 
-                    chat_id, 
-                    file, 
-                    timer_seconds
-                )
-                # تاخیر کوتاه بین ارسال فایل‌ها
-                await asyncio.sleep(0.5)
+                send_func = {
+                    'document': context.bot.send_document,
+                    'photo': context.bot.send_photo,
+                    'video': context.bot.send_video,
+                    'audio': context.bot.send_audio
+                }.get(file['file_type'])
+                
+                if send_func:
+                    await send_func(
+                        chat_id=chat_id,
+                        **{file['file_type']: file['file_id']},
+                        caption=file.get('caption', '')[:1024]
+                    )
+                await asyncio.sleep(0.5)  # افزایش تاخیر برای جلوگیری از محدودیت
             except Exception as e:
                 logger.error(f"ارسال فایل خطا: {e}")
-                await asyncio.sleep(2)  # تاخیر بیشتر در صورت خطا
-        
-        # ارسال پیام هشدار در صورت فعال بودن تایمر
-        if timer_seconds > 0:
-            try:
-                # ارسال پیام هشدار
-                warning_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"⚠️ توجه: فایل‌های ارسال شده به صورت خودکار بعد از {timer_seconds} ثانیه حذف خواهند شد.\n"
-                         "لطفاً آن‌ها را به پیام‌های ذخیره شده خود ارسال کنید."
-                )
-                
-                # زمان‌بندی حذف خودکار پیام هشدار
-                asyncio.create_task(
-                    bot_manager.timer_manager.schedule_deletion(
-                        context, 
-                        warning_msg, 
-                        timer_seconds
-                    )
-                )
-            except Exception as e:
-                logger.error(f"ارسال پیام هشدار خطا: {e}")
-            
+                await asyncio.sleep(2)
     except Exception as e:
         logger.error(f"خطا در ارسال فایل‌ها: {e}")
         await message.reply_text("❌ خطایی در ارسال فایل‌ها رخ داد")
@@ -547,26 +398,6 @@ async def send_category_files(message: Message, context: ContextTypes.DEFAULT_TY
 # ========================
 # ==== ADMIN COMMANDS ====
 # ========================
-
-async def set_timer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تنظیم تایمر پیش‌فرض"""
-    if not bot_manager.is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ دسترسی ممنوع!")
-        return
-    
-    try:
-        seconds = int(context.args[0])
-        if seconds < 0:
-            raise ValueError
-    except (ValueError, IndexError):
-        await update.message.reply_text("❌ مقدار نامعتبر! لطفا عدد ثانیه را وارد کنید.\nمثال: /timer 60")
-        return
-    
-    await bot_manager.db.set_default_timer(seconds)
-    status = "✅ تایمر پیش‌فرض تنظیم شد به: " + (
-        f"{seconds} ثانیه" if seconds > 0 else "غیرفعال"
-    )
-    await update.message.reply_text(status)
 
 async def new_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ایجاد دسته جدید"""
@@ -669,37 +500,6 @@ async def categories_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"  لینک: {bot_manager.generate_link(cid)}\n\n"
     
     await update.message.reply_text(message)
-
-# اضافه شدن حالت جدید به حالت‌های گفتگو
-UPLOADING, WAITING_CHANNEL_INFO, WAITING_TIMER_INPUT = range(3)
-
-async def handle_timer_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """پردازش ورودی تایمر"""
-    user_id = update.effective_user.id
-    text = update.message.text.strip()
-    
-    try:
-        seconds = int(text)
-    except ValueError:
-        await update.message.reply_text("❌ لطفا یک عدد وارد کنید!")
-        return WAITING_TIMER_INPUT
-    
-    category_id = context.user_data.get('timer_category')
-    if not category_id:
-        await update.message.reply_text("❌ خطا در پردازش!")
-        return ConversationHandler.END
-    
-    if seconds == -1:
-        await bot_manager.db.set_category_timer(category_id, None)
-        await update.message.reply_text("✅ تایمر اختصاصی حذف شد، از تایمر پیش‌فرض استفاده می‌شود")
-    else:
-        await bot_manager.db.set_category_timer(category_id, seconds)
-        status = f"✅ تایمر اختصاصی تنظیم شد به: {seconds} ثانیه" if seconds > 0 else "✅ تایمر غیرفعال شد"
-        await update.message.reply_text(status)
-    
-    # بازگشت به منوی دسته
-    await admin_category_menu(update.message, category_id)
-    return ConversationHandler.END
 
 # ========================
 # === CHANNEL MANAGEMENT ==
@@ -1021,16 +821,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await conn.execute("DELETE FROM categories WHERE id = $1", category_id)
         
         await query.edit_message_text(f"✅ دسته '{category['name']}' حذف شد!")
-    elif data.startswith('timer_'):  # بخش جدید برای تایمر
-        category_id = data[6:]
-        context.user_data['timer_category'] = category_id
-        await query.edit_message_text(
-            "⏱ لطفا زمان تایمر را به ثانیه وارد کنید:\n"
-            "• 0 برای غیرفعال کردن\n"
-            "• -1 برای استفاده از تایمر پیش‌فرض\n"
-            "• عدد مثبت برای زمان دلخواه (ثانیه)"
-        )
-        return WAITING_TIMER_INPUT
 
 # ========================
 # === UTILITY HANDLERS ===
@@ -1060,7 +850,7 @@ async def keep_alive():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://final-bot-d3dk.onrender.com") as resp:
+                async with session.get("https://uploader-bot-ely6.onrender.com") as resp:
                     if resp.status == 200:
                         logger.info("✅ Keep-alive ping sent successfully")
                     else:
@@ -1089,19 +879,10 @@ async def run_web_server():
 # ==== BOT SETUP =========
 # ========================
 
-async def post_init(application: Application):
-    bot=await application.bot.get_me()
-    await bot_manager.init(bot.username)
-
 async def run_telegram_bot():
     """اجرای اصلی ربات تلگرام"""
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .concurrent_updates(True)
-        .post_init(post_init)
-        .build()
-    )
+    application = Application.builder().token(BOT_TOKEN).build()
+    
     # دریافت یوزرنیم ربات
     await application.initialize()
     bot = await application.bot.get_me()
@@ -1113,20 +894,7 @@ async def run_telegram_bot():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("new_category", new_category))
     application.add_handler(CommandHandler("categories", categories_list))
-    application.add_handler(CommandHandler("timer", set_timer_command))
-
-    timer_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(button_handler)],
-        states={
-            WAITING_TIMER_INPUT: [MessageHandler(filters.TEXT, handle_timer_input)]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        map_to_parent={
-            ConversationHandler.END: ConversationHandler.END
-        }
-    )
-    application.add_handler(timer_handler)
-
+    
     # آپلود فایل‌ها
     upload_handler = ConversationHandler(
         entry_points=[CommandHandler("upload", upload_command)],
@@ -1185,9 +953,14 @@ async def main():
     )
 
 if __name__ == '__main__':
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        asyncio.run(main())
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
         logger.exception(f"Critical error: {e}")
+    finally:
+        loop.close()
