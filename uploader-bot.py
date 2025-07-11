@@ -482,7 +482,7 @@ class TimerManager:
 
 					# ایجاد صفحه کلید اینلاین
 					keyboard = [
-						[InlineKeyboardButton("📁 مشاهده فایل‌ها", callback_data=f"view_{category_id}")],
+					[InlineKeyboardButton("📁 مشاهده فایل‌ها", callback_data=f"view_{category_id}")],
 					[InlineKeyboardButton("➕ افزودن فایل", callback_data=f"add_{category_id}")],
 					[InlineKeyboardButton("⏱ تنظیم تایمر", callback_data=f"timer_{category_id}")],  # دکمه جدید
 					[InlineKeyboardButton("🗑 حذف دسته", callback_data=f"delcat_{category_id}")]
@@ -490,19 +490,14 @@ class TimerManager:
 
 					# ارسال پیام با اطلاعات کامل
 					await message.reply_text(
-						f
-					"📂 دسته: {category['name']}\n"
-					f
-					"📦 تعداد فایل‌ها: {len(category['files'])}\n"
-					f
-					"{timer_status}\n\n"
-					"لطفا عملیات مورد نظر را انتخاب کنید:",
-					reply_markup = InlineKeyboardMarkup(keyboard)
-					)
+						f"📂 دسته: {category['name']}\n"
+					        f"📦 تعداد فایل‌ها: {len(category['files'])}\n"
+					        f"{timer_status}\n\n"
+					        "لطفا عملیات مورد نظر را انتخاب کنید:",
+					        reply_markup = InlineKeyboardMarkup(keyboard))
 
 					except Exception as e:
-					logger.error(f
-					"خطا در منوی ادمین: {e}")
+					logger.error(f"خطا در منوی ادمین: {e}")
 					await message.reply_text("❌ خطایی در نمایش منو رخ داد")
 
 			async def send_category_files(message: Message, context: ContextTypes.DEFAULT_TYPE, category_id: str):
@@ -519,8 +514,7 @@ class TimerManager:
 					# دریافت تایمر مؤثر برای این دسته
 					timer_seconds = await bot_manager.timer_manager.get_effective_timer(category_id)
 
-					await message.reply_text(f
-					"📤 ارسال فایل‌های '{category['name']}'...")
+					await message.reply_text(f"📤 ارسال فایل‌های '{category['name']}'...")
 
 					# ارسال تمام فایل‌های دسته با در نظر گرفتن تایمر
 					for file in category['files']:
@@ -535,8 +529,7 @@ class TimerManager:
 							# تاخیر کوتاه بین ارسال فایل‌ها
 							await asyncio.sleep(0.5)
 						except Exception as e:
-							logger.error(f
-							"ارسال فایل خطا: {e}")
+							logger.error(f"ارسال فایل خطا: {e}")
 							await asyncio.sleep(2)  # تاخیر بیشتر در صورت خطا
 
 					# ارسال پیام هشدار در صورت فعال بودن تایمر
@@ -545,10 +538,9 @@ class TimerManager:
 							# ارسال پیام هشدار
 							warning_msg = await context.bot.send_message(
 								chat_id=chat_id,
-								text=f
-							"⚠️ توجه: فایل‌های ارسال شده به صورت خودکار بعد از {timer_seconds} ثانیه حذف خواهند شد.\n"
-							"لطفاً آن‌ها را به پیام‌های ذخیره شده خود ارسال کنید."
-							)
+								text=f"⚠️ توجه: فایل‌های ارسال شده به صورت خودکار بعد از {timer_seconds} ثانیه حذف خواهند شد.\n"
+							             "لطفاً آن‌ها را به پیام‌های ذخیره شده خود ارسال کنید."
+							        )
 
 							# زمان‌بندی حذف خودکار پیام هشدار
 							asyncio.create_task(
@@ -559,12 +551,10 @@ class TimerManager:
 								)
 							)
 						except Exception as e:
-							logger.error(f
-							"ارسال پیام هشدار خطا: {e}")
+							logger.error(f"ارسال پیام هشدار خطا: {e}")
 
 					except Exception as e:
-					logger.error(f
-					"خطا در ارسال فایل‌ها: {e}")
+					logger.error(f"خطا در ارسال فایل‌ها: {e}")
 					await message.reply_text("❌ خطایی در ارسال فایل‌ها رخ داد")
 
 			# ========================
@@ -587,8 +577,7 @@ class TimerManager:
 
 				await bot_manager.db.set_default_timer(seconds)
 				status = "✅ تایمر پیش‌فرض تنظیم شد به: " + (
-					f
-				"{seconds} ثانیه" if seconds > 0 else "غیرفعال"
+					f"{seconds} ثانیه" if seconds > 0 else "غیرفعال"
 				)
 				await update.message.reply_text(status)
 
@@ -608,12 +597,9 @@ class TimerManager:
 				link = bot_manager.generate_link(category_id)
 
 				await update.message.reply_text(
-					f
-				"✅ دسته '{name}' ایجاد شد!\n\n"
-				f
-				"🔗 لینک دسته:\n{link}\n\n"
-				f
-				"برای آپلود فایل:\n/upload {category_id}")
+					f"✅ دسته '{name}' ایجاد شد!\n\n"
+				        f"🔗 لینک دسته:\n{link}\n\n"
+				        f"برای آپلود فایل:\n/upload {category_id}")
 
 				async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 					"""شروع آپلود فایل"""
@@ -638,12 +624,9 @@ class TimerManager:
 					}
 
 					await update.message.reply_text(
-						f
-					"📤 حالت آپلود فعال شد! فایل‌ها را ارسال کنید.\n"
-					f
-					"برای پایان: /finish_upload\n"
-					f
-					"برای لغو: /cancel")
+						f"📤 حالت آپلود فعال شد! فایل‌ها را ارسال کنید.\n"
+					        f"برای پایان: /finish_upload\n"
+					        f"برای لغو: /cancel")
 					return UPLOADING
 
 				async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -660,8 +643,7 @@ class TimerManager:
 					upload = bot_manager.pending_uploads[user_id]
 					upload['files'].append(file_info)
 
-					await update.message.reply_text(f
-					"✅ فایل دریافت شد! (تعداد: {len(upload['files'])})")
+					await update.message.reply_text(f"✅ فایل دریافت شد! (تعداد: {len(upload['files'])})")
 
 					async def finish_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
 						"""پایان آپلود فایل‌ها"""
@@ -679,11 +661,9 @@ class TimerManager:
 						link = bot_manager.generate_link(upload['category_id'])
 
 						await update.message.reply_text(
-							f
-						"✅ {count} فایل با موفقیت ذخیره شد!\n\n"
-						f
-						"🔗 لینک دسته:\n{link}")
-						return ConversationHandler.END
+							f"✅ {count} فایل با موفقیت ذخیره شد!\n\n"
+						        f"🔗 لینک دسته:\n{link}")
+					        return ConversationHandler.END
 
 					async def categories_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 						"""نمایش لیست دسته‌ها"""
@@ -698,10 +678,8 @@ class TimerManager:
 
 						message = "📁 لیست دسته‌ها:\n\n"
 						for cid, name in categories.items():
-							message += f
-							"• {name} [ID: {cid}]\n"
-							message += f
-							"  لینک: {bot_manager.generate_link(cid)}\n\n"
+							message += f"• {name} [ID: {cid}]\n"
+							message += f"  لینک: {bot_manager.generate_link(cid)}\n\n"
 
 						await update.message.reply_text(message)
 
@@ -828,12 +806,9 @@ class TimerManager:
 						}
 
 						await update.message.reply_text(
-							f
-						"📤 حالت آپلود فعال شد! فایل‌ها را ارسال کنید.\n"
-						f
-						"برای پایان: /finish_upload\n"
-						f
-						"برای لغو: /cancel")
+							f"📤 حالت آپلود فعال شد! فایل‌ها را ارسال کنید.\n"
+						        f"برای پایان: /finish_upload\n"
+							f"برای لغو: /cancel")
 						return UPLOADING
 
 					async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -869,10 +844,8 @@ class TimerManager:
 							link = bot_manager.generate_link(upload['category_id'])
 
 							await update.message.reply_text(
-								f
-							"✅ {count} فایل با موفقیت ذخیره شد!\n\n"
-							f
-							"🔗 لینک دسته:\n{link}")
+								f"✅ {count} فایل با موفقیت ذخیره شد!\n\n"
+							        f"🔗 لینک دسته:\n{link}")
 							return ConversationHandler.END
 
 						async def categories_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -888,10 +861,8 @@ class TimerManager:
 
 							message = "📁 لیست دسته‌ها:\n\n"
 							for cid, name in categories.items():
-								message += f
-								"• {name} [ID: {cid}]\n"
-								message += f
-								"  لینک: {bot_manager.generate_link(cid)}\n\n"
+								message += f"• {name} [ID: {cid}]\n"
+								message += f"  لینک: {bot_manager.generate_link(cid)}\n\n"
 
 							await update.message.reply_text(message)
 
@@ -978,12 +949,9 @@ class TimerManager:
 							message = "📢 کانال‌های اجباری:\n\n"
 							for i, ch in enumerate(channels, 1):
 								message += (
-									f
-								"{i}. {ch['channel_name']}\n"
-								f
-								"   آیدی: {ch['channel_id']}\n"
-								f
-								"   لینک: {ch['invite_link']}\n\n"
+									f"{i}. {ch['channel_name']}\n"
+								        f"   آیدی: {ch['channel_id']}\n"
+								        f"   لینک: {ch['invite_link']}\n\n"
 								)
 
 								await update.message.reply_text(message)
