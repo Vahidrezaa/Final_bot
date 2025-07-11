@@ -46,7 +46,7 @@ class Database:
         """ایجاد جداول مورد نیاز"""
         async with self.pool.acquire() as conn:
 
-	    await conn.execute('''
+            await conn.execute('''
                 ALTER TABLE categories ADD COLUMN IF NOT EXISTS timer INTEGER
             ''')
         
@@ -287,7 +287,7 @@ class BotManager:
         self.pending_uploads = {}  # {user_id: {'category_id': str, 'files': list}}
         self.pending_channels = {}  # {user_id: {'channel_id': str, 'name': str, 'link': str}}
         self.bot_username = None
-	self.timer_manager = TimerManager(self.db)
+        self.timer_manager = TimerManager(self.db)
     
     async def init(self, bot_username: str):
         """راه‌اندازی اولیه"""
@@ -1106,7 +1106,7 @@ async def run_telegram_bot():
     application.add_handler(CommandHandler("categories", categories_list))
     application.add_handler(CommandHandler("timer", set_timer_command))
 
-	timer_handler = ConversationHandler(
+    timer_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(button_handler)],
         states={
             WAITING_TIMER_INPUT: [MessageHandler(filters.TEXT, handle_timer_input)]
