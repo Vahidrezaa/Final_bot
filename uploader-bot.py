@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # حالت‌های گفتگو
-UPLOADING, WAITING_CHANNEL_INFO = range(2)
+UPLOADING, WAITING_CHANNEL_INFO, WAITING_TIMER_INPUT = range(3)
 
 class Database:
     """مدیریت دیتابیس PostgreSQL بهینه‌شده"""
