@@ -496,7 +496,7 @@ class TimerManager:
 					        "لطفا عملیات مورد نظر را انتخاب کنید:",
 					        reply_markup = InlineKeyboardMarkup(keyboard))
 
-					except Exception as e:
+				except Exception as e:
 					logger.error(f"خطا در منوی ادمین: {e}")
 					await message.reply_text("❌ خطایی در نمایش منو رخ داد")
 
