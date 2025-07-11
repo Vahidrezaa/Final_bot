@@ -282,8 +282,7 @@ class TimerManager:
 
 					return sent_message
 				except Exception as e:
-					logger.error(f
-					"ارسال فایل {file_type} خطا: {e}")
+					logger.error(f"ارسال فایل {file_type} خطا: {e}")
 				return None
 
 		class BotManager:
@@ -389,8 +388,7 @@ class TimerManager:
 					if member.status in ['member', 'administrator', 'creator']:
 						return True
 				except Exception as e:
-					logger.warning(f
-					"خطا در بررسی عضویت: {e}")
+					logger.warning(f"خطا در بررسی عضویت: {e}")
 
 					await asyncio.sleep(2)  # تاخیر 2 ثانیه‌ای بین هر تلاش
 
